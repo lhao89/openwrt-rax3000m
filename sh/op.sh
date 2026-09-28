@@ -52,10 +52,11 @@ pushd feeds/luci || exit 1
 for patch in *.patch; do
     [ -f "$patch" ] || continue
 
-    apply_patch_once "$patch" || {
-        popd
-        exit 1
-    }
+    if apply_patch_once "$patch"; then
+        echo "OK: $patch applied"
+    else
+        echo "::warning::luci patch $patch not applicable to this source tree, skipping (non-fatal)"
+    fi
 done
 popd
 
@@ -113,9 +114,11 @@ for patch in *.patch; do
         continue
     fi
 
-    apply_patch_once "$patch" || {
-        exit 1
-    }
+    if apply_patch_once "$patch"; then
+        echo "OK: $patch applied"
+    else
+        echo "::warning::patch $patch not applicable to this source tree, skipping (non-fatal)"
+    fi
 done
 
 
