@@ -186,6 +186,20 @@ git clone --depth=1 https://github.com/destan19/luci-app-harbor-file.git package
 ./scripts/feeds update -a
 ./scripts/feeds install -a
 
+# 设置 Argon 为默认 LuCI 主题（刷机后直接就是 Argon 界面）
+LUCI_DEFAULT_CFG="feeds/luci/modules/luci-base/root/etc/config/luci"
+if [ -f "$LUCI_DEFAULT_CFG" ]; then
+    sed -i "s#option mediaurlbase '/luci-static/[^']*'#option mediaurlbase '/luci-static/argon'#" "$LUCI_DEFAULT_CFG"
+    if grep -q "luci-static/argon" "$LUCI_DEFAULT_CFG"; then
+        echo "::notice::Argon set as default LuCI theme"
+    else
+        echo "::warning::Argon default theme sed did not match, keeping original"
+    fi
+else
+    echo "::error::luci default config not found: $LUCI_DEFAULT_CFG"
+    exit 1
+fi
+
 sed -i 's|/bin/login|/bin/login -f root|g' feeds/packages/utils/ttyd/files/ttyd.config
 
 
