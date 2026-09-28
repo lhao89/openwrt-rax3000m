@@ -1,5 +1,4 @@
 name: openwrt
-
 on:
   repository_dispatch:
   workflow_dispatch:
@@ -7,30 +6,27 @@ on:
       OP_IP:
         description: '静态IP地址'     
         required: false
-        default: '192.168.2.1' 
+        default: '192.168.31.1' 
         type: string
       OP_author:
         description: '定制作者'     
         required: false
-        default: 'kubulama' 
+        default: 'ax3000t' 
         type: string    
       CUSTOM_PLUGINS:
         description: '自定义插件名称，用空格分隔'
         required: false
-        default: 'luci-app-zerotier luci-app-socat luci-app-samba4 luci-theme-m3e luci-app-ttyd luci-app-diskman luci-app-daed luci-i18n-daed-zh-cn'
+        default: 'luci-app-oaf rtp2httpd luci-app-rtp2httpd luci-i18n-rtp2httpd-zh-cn luci-app-harbor-file luci-theme-argon luci-app-argon-config'
         type: string
       BUILD_DATE:
         description: '固件发布日期，留空则使用当天日期'
         required: false
-        default: '20260824'
+        default: '20260928'
         type: string
-
 permissions:
   contents: write
-
 env:
   DIY_P1_SH: sh/op.sh
-
 jobs:
   build_firmware:
     name: 编译固件 - ${{ matrix.device }} - ${{ matrix.source }}
@@ -43,18 +39,10 @@ jobs:
         include:
           - device: "mt7981-multi"
             config: |
-              CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_cmcc_rax3000m=y
-              CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_cmcc_rax3000m-emmc=y
-              CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_cmcc_rax3000m-nand=y
-              CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_cmcc_rax3000m-256m-nand=y
-              CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_cmcc_xr30-emmc=y
-              CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_cmcc_xr30-nand=y
-              CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_jcg_q30-pro=y
-
+              CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_xiaomi_mi-router-ax3000t=y
     steps: 
     - name: 检查分支
       uses: actions/checkout@v6
-
     - name: 释放磁盘空间
       run: |
         sudo rm -rf /etc/apt/sources.list.d
@@ -70,7 +58,6 @@ jobs:
         sudo sed -i '/NVM_DIR/d;/skel/d' /root/{.bashrc,.profile}
         rm -rf ~/{.cargo,.dotnet,.rustup}
         df -Th
-
     - name: 编译环境
       env:
         DEBIAN_FRONTEND: noninteractive
@@ -83,7 +70,6 @@ jobs:
         sudo mkdir -p /workdir
         sudo chown $USER:$GROUPS /workdir
         df -Th
-
     - name: 设置环境变量
       run: |
         TAG="${{ github.event.inputs.BUILD_DATE }}"
@@ -94,23 +80,22 @@ jobs:
         echo "CUSTOM_PLUGINS=${{ github.event.inputs.CUSTOM_PLUGINS }}" >> $GITHUB_ENV
         echo "DEVICE_NAME=${{ matrix.device }}" >> $GITHUB_ENV
         echo "SOURCE_NAME=${{ matrix.source }}" >> $GITHUB_ENV
-        echo "REPO_URL=https://github.com/shiyu1314/openwrt-source" >> $GITHUB_ENV
-        echo "REPO_BRANCH=openwrt-25.12" >> $GITHUB_ENV
-
+        echo "REPO_URL=https://github.com/chasey-dev/immortalwrt-mt798x-rebase" >> $GITHUB_ENV
+        echo "REPO_BRANCH=25.12" >> $GITHUB_ENV
     - name: 克隆源代码
       working-directory: /workdir
       run: |
         df -hT $PWD
-        git clone $REPO_URL $SOURCE_NAME
+        git clone -b $REPO_BRANCH --depth 1 --single-branch $REPO_URL $SOURCE_NAME
         ln -sf /workdir/$SOURCE_NAME $GITHUB_WORKSPACE/$SOURCE_NAME
         
     - name: 切换分支
       run: |
         cd $SOURCE_NAME
         case $REPO_BRANCH in
-          openwrt-25.12)
-            _release_tag=$(git tag --sort=taggerdate --list 'v25.*' | tail -1)
-            git checkout $_release_tag
+          25.12)
+            _release_tag=$REPO_BRANCH
+            git checkout $REPO_BRANCH
             _prerelease=false
             ;;
           *)
@@ -134,12 +119,7 @@ jobs:
         key: ${{ matrix.source }}-${{ matrix.device }}-build-cache-${{ github.run_id }}
         restore-keys: |
           ${{ matrix.source }}-${{ matrix.device }}-build-cache-
-          ${{ matrix.source }}-jcg-q30-pro-build-cache-
-          ${{ matrix.source }}-xr30-emmc-build-cache-
-          ${{ matrix.source }}-xr30-nand-build-cache-
-          ${{ matrix.source }}-rax3000m-emmc-build-cache-
-          ${{ matrix.source }}-rax3000m-nand-build-cache-
-
+          ${{ matrix.source }}-xiaomi-mi-router-ax3000t-build-cache-
     - name: Validate toolchain cache
       run: |
         cd $SOURCE_NAME
@@ -149,7 +129,7 @@ jobs:
           rm -f staging_dir/target-*/pkginfo/toolchain.* staging_dir/target-*/stamp/.toolchain_installed
         fi
         if [ -d dl/go-mod-cache ]; then
-          echo "::warning::Dropping restored Go module cache; it can be left incomplete by failed daed builds."
+          echo "::warning::Dropping restored Go module cache; it can be left incomplete by failed builds."
           rm -rf dl/go-mod-cache
         fi
             
@@ -170,8 +150,7 @@ jobs:
         $GITHUB_WORKSPACE/$DIY_P1_SH
         cd ..
         [ -e patch ] && cp -rf patch/nginx/luci.locations $SOURCE_NAME/feeds/packages/net/nginx/files-luci-support
-        [ -e patch ] && cp -rf patch/nginx/uci.conf.template $SOURCE_NAME/feeds/packages/net/nginx-util/files
-
+        [ -e patch ] && cp -rf patch/nginx/uci.conf.template $SOURCE_OAME/feeds/packages/net/nginx-util/files
     - name: 加载自定义配置
       run: |
         [ -e files ] && mv files $SOURCE_NAME/files
@@ -181,7 +160,7 @@ jobs:
         ${{ matrix.config }}
         EOF
         
-        [ -e config ] && cat config/config-common >> $SOURCE_NAME/.config
+        [ -e config ] && cat config/config-common >> $SOURCE_OAME/.config
         
         sed -i "s/192.168.1.1/${{ github.event.inputs.OP_IP }}/" $SOURCE_NAME/package/base-files/files/bin/config_generate
         
@@ -199,30 +178,17 @@ jobs:
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
 
-    - name: BPF/LLVM early checkpoint
-      run: |
-        cd $SOURCE_NAME
-        trap 'echo "::group::BPF checkpoint diagnostics"; find staging_dir -maxdepth 4 \( -path "*/toolchain-*" -o -name "libgcc_s.so*" -o -name "*.toolchain*" \) -print 2>/dev/null || true; find build_dir -maxdepth 3 \( -path "*/toolchain*" -o -path "*/bpf-headers*" \) -print 2>/dev/null || true; echo "::endgroup::"' ERR
-        clang --version || true
-        grep -E 'CONFIG_(BPF_TOOLCHAIN|USE_LLVM|HAS_BPF|SDK_LLVM|KERNEL_DEBUG_INFO|KERNEL_BPF|KERNEL_CGROUP_BPF|KERNEL_XDP|DAE.*BTF|DAE.*BPF_DEPENDS)' .config || true
-        make tools/install -j$(nproc) || yes n | make tools/install -j1 V=s
-        make toolchain/install -j$(nproc) || yes n | make toolchain/install -j1 V=s
-        make target/compile -j$(nproc) || yes n | make target/compile -j1 V=s
-        make package/kernel/bpf-headers/compile V=s || yes n | make package/kernel/bpf-headers/compile V=s
-    
     - name: 编译源码
       id: compile
       run: |
         cd $SOURCE_NAME
         echo -e "$(nproc) thread compile"
         make -j$(nproc) || yes n | make -j1 || yes n | make -j1 V=s
-
     - name: Clean volatile Go module cache
       if: always()
       run: |
         cd $SOURCE_NAME
         rm -rf dl/go-mod-cache
-
     - name: Save build cache
       if: always()
       uses: actions/cache/save@v5
@@ -236,12 +202,10 @@ jobs:
           ${{ matrix.source }}/bin/packages
           ${{ matrix.source }}/bin/targets
         key: ${{ matrix.source }}-${{ matrix.device }}-build-cache-${{ github.run_id }}
-
     - name: 查看磁盘使用情况
       if: (!cancelled())
       run: df -hT
-
-    - name: 整理文件
+    - name: 整琂文件
       id: organize
       run: |
         cd $SOURCE_NAME/bin/targets/*/*
@@ -254,7 +218,6 @@ jobs:
         rm -rf *.sha
         rm -rf sha256sums
         echo "FIRMWARE=$PWD" >> $GITHUB_ENV
-
     - name: 上传固件到Releases
       uses: softprops/action-gh-release@v3
       env:
