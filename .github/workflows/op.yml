@@ -146,11 +146,11 @@ jobs:
     - name: 加载自定义脚本
       run: |
         chmod +x $DIY_P1_SH
-        cd $SOURCE_NAME
+        cd $GITHUB_WORKSPACE/$SOURCE_NAME
         $GITHUB_WORKSPACE/$DIY_P1_SH
-        cd ..
-        [ -e patch ] && cp -rf patch/nginx/luci.locations $SOURCE_NAME/feeds/packages/net/nginx/files-luci-support
-        [ -e patch ] && cp -rf patch/nginx/uci.conf.template $SOURCE_OAME/feeds/packages/net/nginx-util/files
+        cd $GITHUB_WORKSPACE
+        [ -e patch ] && mkdir -p $GITHUB_WORKSPACE/$SOURCE_NAME/feeds/packages/net/nginx/files-luci-support && cp -rf patch/nginx/luci.locations $GITHUB_WORKSPACE/$SOURCE_NAME/feeds/packages/net/nginx/files-luci-support
+        [ -e patch ] && mkdir -p $GITHUB_WORKSPACE/$SOURCE_NAME/feeds/packages/net/nginx-util/files && cp -rf patch/nginx/uci.conf.template $GITHUB_WORKSPACE/$SOURCE_NAME/feeds/packages/net/nginx-util/files
     - name: 加载自定义配置
       run: |
         [ -e files ] && mv files $SOURCE_NAME/files
@@ -160,7 +160,7 @@ jobs:
         ${{ matrix.config }}
         EOF
         
-        [ -e config ] && cat config/config-common >> $SOURCE_OAME/.config
+        [ -e config ] && cat config/config-common >> $SOURCE_NAME/.config
         
         sed -i "s/192.168.1.1/${{ github.event.inputs.OP_IP }}/" $SOURCE_NAME/package/base-files/files/bin/config_generate
         
@@ -205,7 +205,7 @@ jobs:
     - name: 查看磁盘使用情况
       if: (!cancelled())
       run: df -hT
-    - name: 整琂文件
+    - name: 整理文件
       id: organize
       run: |
         cd $SOURCE_NAME/bin/targets/*/*
